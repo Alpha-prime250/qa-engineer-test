@@ -17,10 +17,35 @@ router.post('/submit', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'invoice_id required' });
     }
 
-    // Find or create invoice
+    // Look the invoice up first (no side effects yet)
     let invoice = db.invoices?.find(inv => inv.id === invoice_id);
+
+    // Verify ownership
+    if (invoice && invoice.merchant_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Validate B2B requirement (SIRET = exactly 14 digits).
+    // Extra finding: this used to run AFTER the demo invoice was created, so a
+    // rejected request still left a draft invoice behind; and any 14-char string
+    // (e.g. "abcdefghijklmn") was accepted.
+    if (typeof customer_siret !== 'string' || !/^\d{14}$/.test(customer_siret)) {
+      return res.status(400).json({
+        error: 'Valid customer SIRET required for e-invoicing (14 digits)'
+      });
+    }
+
+    // BUG G FIX: never submit the same invoice twice to the tax authority.
+    // ('rejected' / 'error' invoices may legitimately be re-submitted.)
+    if (invoice &&
+        (invoice.einvoice_status === 'submitted' || invoice.einvoice_status === 'accepted')) {
+      return res.status(409).json({
+        error: 'Invoice already submitted to tax authority'
+      });
+    }
+
+    // Create demo invoice if it does not exist yet
     if (!invoice) {
-      // Create demo invoice
       invoice = {
         id: invoice_id,
         merchant_id: req.user.id,
@@ -34,28 +59,6 @@ router.post('/submit', authenticate, async (req, res) => {
       if (!db.invoices) db.invoices = [];
       db.invoices.push(invoice);
     }
-
-    // Verify ownership
-    if (invoice.merchant_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Validate B2B requirement
-    if (!customer_siret || customer_siret.length !== 14) {
-      return res.status(400).json({ 
-        error: 'Valid customer SIRET required for e-invoicing (14 digits)' 
-      });
-    }
-
-    // BUG G: No duplicate submission check
-    // Should prevent submitting the same invoice twice
-    // Missing validation below:
-    
-    // if (invoice.einvoice_status === 'submitted' || invoice.einvoice_status === 'accepted') {
-    //   return res.status(409).json({ 
-    //     error: 'Invoice already submitted to tax authority' 
-    //   });
-    // }
 
     // Simulate tax authority submission
     const submission_id = `SUB-${uuidv4()}`;

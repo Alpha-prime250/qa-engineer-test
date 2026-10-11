@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.middleware.js';
-import { db } from '../db/database.js';
+import { db, findUserById } from '../db/database.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
@@ -41,21 +41,41 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Order must have at least one item' });
     }
 
-    // BUG F: No duplicate order prevention
-    // Should check if table already has a pending order
-    // Missing validation below:
-    
-    // const existingOrder = (db.table_orders || []).find(
-    //   o => o.merchant_id === merchant_id && 
-    //        o.table_number === table_number && 
-    //        o.status === 'pending'
-    // );
-    // if (existingOrder) {
-    //   return res.status(409).json({ error: 'Table already has a pending order' });
-    // }
+    // Extra finding: items were never validated, so a missing/negative price or
+    // quantity produced a NaN or negative order total.
+    const itemsValid = items.every(item =>
+      item && typeof item === 'object' &&
+      Number.isFinite(item.price) && item.price >= 0 &&
+      Number.isInteger(item.quantity) && item.quantity > 0
+    );
+    if (!itemsValid) {
+      return res.status(400).json({
+        error: 'Each item needs a non-negative numeric price and a positive integer quantity'
+      });
+    }
 
-    // Calculate total
-    const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Orders for unknown merchants must not be accepted (POST is public by design
+    // for diner/QR ordering, so the merchant id from the body is validated here).
+    if (!findUserById(String(merchant_id))) {
+      return res.status(404).json({ error: 'Merchant not found' });
+    }
+
+    // BUG F FIX: a table may only have one pending order at a time.
+    // String() so table 5 and "5" are treated as the same table.
+    // (Handler is synchronous, so the check + insert below is atomic in Node.)
+    const existingOrder = (db.table_orders || []).find(
+      o => o.merchant_id === merchant_id &&
+           String(o.table_number) === String(table_number) &&
+           o.status === 'pending'
+    );
+    if (existingOrder) {
+      return res.status(409).json({ error: 'Table already has a pending order' });
+    }
+
+    // Calculate total (rounded to cents to avoid 0.1 + 0.2 float artefacts)
+    const total = Math.round(
+      items.reduce((sum, item) => sum + (item.price * item.quantity), 0) * 100
+    ) / 100;
 
     const newOrder = {
       id: uuidv4(),
@@ -73,8 +93,12 @@ router.post('/', (req, res) => {
     if (!db.table_orders) db.table_orders = [];
     db.table_orders.push(newOrder);
 
-    // Emit socket event (would be handled by socket.io)
-    // io.to(`merchant_${merchant_id}`).emit('new_order', newOrder);
+    // Extra finding: this emit was commented out, so real-time clients never
+    // received new orders even though the README documents the event.
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`merchant_${merchant_id}`).emit('new_order', newOrder);
+    }
 
     res.status(201).json({
       success: true,
@@ -117,12 +141,17 @@ router.patch('/:id/status', authenticate, (req, res) => {
     order.status = status;
     order.updated_at = new Date();
 
-    // Emit socket event for real-time update
-    // io.to(`table_${order.table_number}`).emit('order_status_changed', {
-    //   order_id: order.id,
-    //   status: status,
-    //   table_number: order.table_number
-    // });
+    // Emit socket event for real-time update (was commented out)
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`table_${order.table_number}`)
+        .to(`merchant_${order.merchant_id}`)
+        .emit('order_status_changed', {
+          order_id: order.id,
+          status: status,
+          table_number: order.table_number
+        });
+    }
 
     res.json({
       success: true,

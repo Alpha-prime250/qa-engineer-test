@@ -2,32 +2,31 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { findUserByEmail, createUser } from '../db/database.js';
+import { JWT_SECRET } from '../config.js';
+import { validateEmail, normalizeEmail } from '../utils/validators.js';
 
 const router = express.Router();
-const JWT_SECRET = 'test-secret-key-do-not-use-in-production';
-
-// BUG C: Email validation is too permissive
-function validateEmail(email) {
-  // BUG: This regex allows emails without TLD like "user@domain"
-  const emailRegex = /^[^\s@]+@[^\s@]+$/;
-  return emailRegex.test(email);
-}
+// BUG C FIX: email validation now lives in utils/validators.js and requires a TLD
+// (the old pattern had no dot/TLD part, so "user@domain" was accepted). Re-exported for tests.
+export { validateEmail };
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, business_name } = req.body;
+    const { password, business_name } = req.body;
+    // Normalise so "USER@x.com" and "user@x.com" cannot be registered twice
+    const email = normalizeEmail(req.body.email);
 
     // Validation
     if (!email || !validateEmail(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    if (!password || password.length < 8) {
+    if (typeof password !== 'string' || password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    if (!business_name || business_name.trim().length < 2) {
+    if (typeof business_name !== 'string' || business_name.trim().length < 2) {
       return res.status(400).json({ error: 'Business name is required' });
     }
 
@@ -73,9 +72,10 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
-    if (!email || !password) {
+    if (!email || !password || typeof password !== 'string') {
       return res.status(400).json({ error: 'Email and password required' });
     }
 

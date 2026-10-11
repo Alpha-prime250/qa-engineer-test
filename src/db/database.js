@@ -1,3 +1,5 @@
+import bcrypt from "bcryptjs";
+
 // Simple in-memory database for testing
 // In a real app, this would be PostgreSQL/MySQL
 
@@ -12,11 +14,16 @@ export const db = {
 
 // Seed some test data
 export function initDatabase() {
+  // Reset so calling it twice (restart / tests) never duplicates seed data
+  for (const key of Object.keys(db)) db[key] = [];
+
   // Create a test merchant
   db.users.push({
     id: "1",
     email: "merchant@test.com",
-    password: "$2a$10$8Z3KxGXvGqJQZ.ZF9Z3KxGXvGqJQZ.ZF9Z3KxGXvGqJQZ.ZF9", // password: Test123!
+    // Extra finding: the previously hard-coded hash was not a valid bcrypt hash of
+    // "Test123!", so the documented test login always failed. Hash at seed time.
+    password: bcrypt.hashSync("Test123!", 10), // password: Test123!
     business_name: "Test Merchant",
     type: "merchant",
     created_at: new Date(),
@@ -48,7 +55,9 @@ export function initDatabase() {
 
 // Helper to find user by email
 export function findUserByEmail(email) {
-  return db.users.find((u) => u.email === email);
+  // Case-insensitive lookup (emails are stored lower-cased)
+  const normalized = typeof email === "string" ? email.trim().toLowerCase() : email;
+  return db.users.find((u) => u.email === normalized);
 }
 
 // Helper to find user by ID
