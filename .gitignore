@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+.env
+*.log
+npm-debug.log*
+
+# Candidate submissions (don't track these)
+bug-reports.md
+fixes.md
+test-plan.md
+submissions/

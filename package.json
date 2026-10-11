@@ -1,0 +1,32 @@
+{
+  "name": "eupay-qa-test",
+  "version": "1.0.0",
+  "description": "EU Pay QA Engineer Test Assignment",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "verify-bugs": "node scripts/verify-bugs.js"
+  },
+  "keywords": [
+    "eupay",
+    "qa",
+    "testing"
+  ],
+  "author": "EU Pay",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1",
+    "socket.io": "^4.7.2",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "supertest": "^6.3.4"
+  }
+}
