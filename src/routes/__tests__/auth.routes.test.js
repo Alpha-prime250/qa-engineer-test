@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { validateEmail } from '../auth.routes.js';
-import { startServer, api, loginAndGetToken } from './_helpers.js';
+import { startServer, api, loginAndGetToken } from './_helper.js';
 
 let srv;
 before(async () => { srv = await startServer(); });

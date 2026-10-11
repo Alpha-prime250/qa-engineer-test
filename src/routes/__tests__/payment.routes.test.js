@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
-import { startServer, api, loginAndGetToken, registerAndGetToken } from './_helpers.js';
+import { startServer, api, loginAndGetToken, registerAndGetToken } from './_helper.js';
 
 let srv, token;
 before(async () => {

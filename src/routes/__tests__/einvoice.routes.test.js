@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { db } from '../../db/database.js';
-import { startServer, api, loginAndGetToken, registerAndGetToken, signedWebhook } from './_helpers.js';
+import { startServer, api, loginAndGetToken, registerAndGetToken, signedWebhook } from './_helper.js';
 
 let srv, token;
 before(async () => {
